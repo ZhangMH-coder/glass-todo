@@ -1,0 +1,57 @@
+/**
+ * GlassTodo 2.0 主题扩展层（借鉴 overview-hub token 化范式）
+ * 组件依赖 global.css 的 --glass-* 体系，本层只做「主题 = 换 token 值」：
+ *   1. warm / cool 两套新主题覆盖 --glass-* / --text-* / --accent-* 等；
+ *   2. 背景层语义变量 --gt-bg-*（色调/颜色深浅/背景亮度/壁纸），供 backdrop 与 .wallpaper 联动。
+ * 深色为默认（global.css :root），light 由 global.css :root[data-theme='light'] 提供。
+ */
+
+/* ── 背景层语义变量（默认值 = 参考图参数） ── */
+:root {
+  --gt-bg-hue: 316deg;
+  --gt-bg-saturation: 36%;
+  --gt-bg-lightness: 58%;
+  --gt-bg-brightness: 1;
+  --gt-wallpaper: none;
+  --gt-wallpaper-size: cover;
+  --gt-wallpaper-pos: center center;
+}
+
+/* ── warm：暖棕玻璃 ── */
+html[data-theme='warm'] {
+  color-scheme: dark;
+  --glass-bg: rgba(255, 235, 215, 0.08);
+  --glass-bg-strong: rgba(255, 235, 215, 0.13);
+  --glass-bg-soft: rgba(255, 235, 215, 0.05);
+  --glass-border: rgba(255, 235, 215, 0.16);
+  --glass-border-strong: rgba(255, 235, 215, 0.26);
+  --text: rgba(250, 240, 228, 0.95);
+  --text-dim: rgba(250, 240, 228, 0.7);
+  --text-faint: rgba(250, 240, 228, 0.48);
+  --accent: #e1b98f;
+  --accent-soft: rgba(225, 185, 143, 0.2);
+  --p-low: rgba(250, 240, 228, 0.42);
+}
+
+/* ── cool：冷蓝玻璃 ── */
+html[data-theme='cool'] {
+  color-scheme: dark;
+  --glass-bg: rgba(200, 230, 255, 0.07);
+  --glass-bg-strong: rgba(200, 230, 255, 0.12);
+  --glass-bg-soft: rgba(200, 230, 255, 0.04);
+  --glass-border: rgba(200, 230, 255, 0.15);
+  --glass-border-strong: rgba(200, 230, 255, 0.25);
+  --text: rgba(220, 232, 242, 0.95);
+  --text-dim: rgba(220, 232, 242, 0.7);
+  --text-faint: rgba(220, 232, 242, 0.48);
+  --accent: #8bc8ea;
+  --accent-soft: rgba(139, 200, 234, 0.2);
+  --p-low: rgba(220, 232, 242, 0.42);
+}
+
+/* ── light：覆盖修正为 token 值（与 global.css 浅色主题对齐） ── */
+html[data-theme='light'] {
+  --gt-bg-hue: 230deg;
+  --gt-bg-saturation: 60%;
+  --gt-bg-lightness: 70%;
+}

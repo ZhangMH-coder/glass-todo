@@ -1,0 +1,299 @@
+@import './layout.css';
+@import './components.css';
+
+/* ============================================================
+   GlassTodo 设计 token
+   玻璃拟态的核心是分层模糊：模糊半径按层级递进制造纵深。
+   ============================================================ */
+:root {
+  color-scheme: dark;
+
+  /* 玻璃基底 */
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-bg-strong: rgba(255, 255, 255, 0.16);
+  --glass-bg-soft: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --glass-border-strong: rgba(255, 255, 255, 0.28);
+
+  /* 模糊分级：侧栏 32 / 卡片 20（跟随玻璃模糊度设置）/ 浮层 40
+     磨砂度（--gt-glass-saturate）统一降低玻璃饱和度，制造雾面质感 */
+  --blur-sidebar: blur(32px) saturate(var(--gt-glass-saturate, 150%));
+  --blur-card: blur(var(--gt-glass-blur, 20px)) saturate(var(--gt-glass-saturate, 140%));
+  --blur-overlay: blur(40px) saturate(var(--gt-glass-saturate, 160%));
+
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 32px rgba(0, 0, 0, 0.28);
+  --glass-shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 16px 48px rgba(0, 0, 0, 0.38);
+
+  --radius: 18px;
+  --radius-sm: 12px;
+  --radius-lg: 26px;
+
+  /* 文字：正文落在足够不透明的底板上，保证对比度 >= 4.5:1 */
+  --text: rgba(255, 255, 255, 0.95);
+  --text-dim: rgba(255, 255, 255, 0.72);
+  --text-faint: rgba(255, 255, 255, 0.5);
+
+  --accent: #7aa2ff;
+  --accent-soft: rgba(122, 162, 255, 0.22);
+  --success: #5ee6c0;
+  --warn: #ffcf6b;
+  --danger: #ff8fa3;
+
+  --p-urgent: #ff7a90;
+  --p-high: #ffb86b;
+  --p-normal: #7aa2ff;
+  --p-low: rgba(255, 255, 255, 0.45);
+
+  --sidebar-w: 236px;
+  --titlebar-h: 44px;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* 浅色主题：降低白色叠加、改用深色文字，维持可读对比度 */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-bg-soft: rgba(255, 255, 255, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-border-strong: rgba(120, 130, 160, 0.32);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 28px rgba(40, 50, 90, 0.16);
+  --glass-shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 16px 44px rgba(40, 50, 90, 0.22);
+  --text: rgba(22, 28, 45, 0.95);
+  --text-dim: rgba(22, 28, 45, 0.68);
+  --text-faint: rgba(22, 28, 45, 0.45);
+  --accent: #3d63d8;
+  --accent-soft: rgba(61, 99, 216, 0.16);
+  --p-low: rgba(22, 28, 45, 0.4);
+}
+
+/* 关闭玻璃：降级为实色卡片，供低性能设备或偏好设置使用 */
+:root[data-glass='off'] {
+  --glass-bg: rgba(20, 26, 46, 0.92);
+  --glass-bg-strong: rgba(28, 36, 60, 0.96);
+  --glass-bg-soft: rgba(16, 22, 40, 0.9);
+  --blur-sidebar: none;
+  --blur-card: none;
+  --blur-overlay: none;
+}
+:root[data-glass='off'][data-theme='light'] {
+  --glass-bg: rgba(248, 250, 255, 0.98);
+  --glass-bg-strong: #ffffff;
+  --glass-bg-soft: rgba(240, 244, 252, 0.98);
+}
+
+/* 系统级偏好优先：用户在 OS 层要求减少透明度时直接降级 */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-bg: rgba(20, 26, 46, 0.94);
+    --glass-bg-strong: rgba(28, 36, 60, 0.97);
+    --blur-sidebar: none;
+    --blur-card: none;
+    --blur-overlay: none;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  /* 窗口透明 + 系统 acrylic 时，这里必须保持透明才能透出桌面模糊 */
+  background: transparent;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   背景：壁纸层（WallpaperLayer，用户本地图片 + 平铺/缩放/位置 + 动画 + 轮播）
+   + 流体光斑层（跟随 --gt-bg-* 调节，壁纸模式下不渲染）
+   两层都固定于视口、z-index 0；UI 层（.app）在其上。
+   ============================================================ */
+.wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  /* 深色底：壁纸调低透明度时露出深色而非桌面 */
+  background: hsl(220deg 30% 9%);
+}
+
+/* inner 放大到 110%，给 Ken Burns 的推拉留出余量；
+   brightness 跟随背景亮度设置（50 原样 / 100 纯白） */
+.wallpaper__inner {
+  position: absolute;
+  left: -5%;
+  top: -5%;
+  width: 110%;
+  height: 110%;
+  background-size: var(--gt-wp-fit, cover);
+  background-repeat: var(--gt-wp-repeat, no-repeat);
+  background-position: var(--gt-wp-pos, center center);
+  filter: brightness(var(--gt-bg-brightness, 1));
+  animation: wp-fade-in 0.45s var(--ease) both;
+}
+
+/* Ken Burns：缓慢推近 + 微平移，24s 一个往返，无限循环 */
+.wallpaper__inner--kb {
+  animation:
+    wp-fade-in 0.45s var(--ease) both,
+    wp-kenburns 24s var(--ease) infinite alternate;
+}
+
+/* 淡入：只定义起始帧，结束值取元素自身 opacity（内联壁纸透明度不被动画覆盖） */
+@keyframes wp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes wp-kenburns {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.1) translate3d(-1.2%, -0.8%, 0);
+  }
+}
+
+/* 减少动效时关闭 Ken Burns，仅保留淡入 */
+:root[data-motion='reduced'] .wallpaper__inner--kb {
+  animation: wp-fade-in 0.45s var(--ease) both;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 12% 8%, hsl(var(--gt-bg-hue, 316deg) 70% 62% / 0.32), transparent 60%),
+    radial-gradient(90% 80% at 88% 18%, hsl(calc(var(--gt-bg-hue, 316deg) + 60deg) 65% 66% / 0.26), transparent 62%),
+    radial-gradient(110% 100% at 60% 96%, hsl(calc(var(--gt-bg-hue, 316deg) - 40deg) 62% 58% / 0.24), transparent 60%),
+    linear-gradient(160deg, hsl(var(--gt-bg-hue, 316deg) 42% 12%) 0%, hsl(var(--gt-bg-hue, 316deg) 46% 15%) 48%, hsl(var(--gt-bg-hue, 316deg) 50% 10%) 100%);
+  filter: brightness(var(--gt-bg-brightness, 1));
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.blob-1 {
+  width: 52vw;
+  height: 52vw;
+  left: -12vw;
+  top: -16vw;
+  background: radial-gradient(circle, rgba(122, 162, 255, 0.85), transparent 68%);
+  animation: drift-a 34s var(--ease) infinite alternate;
+}
+.blob-2 {
+  width: 44vw;
+  height: 44vw;
+  right: -10vw;
+  top: 8vh;
+  background: radial-gradient(circle, rgba(255, 138, 190, 0.7), transparent 68%);
+  animation: drift-b 42s var(--ease) infinite alternate;
+}
+.blob-3 {
+  width: 48vw;
+  height: 48vw;
+  left: 26vw;
+  bottom: -22vw;
+  background: radial-gradient(circle, rgba(94, 230, 192, 0.62), transparent 68%);
+  animation: drift-c 38s var(--ease) infinite alternate;
+}
+
+@keyframes drift-a {
+  to {
+    transform: translate3d(8vw, 6vh, 0) scale(1.12);
+  }
+}
+@keyframes drift-b {
+  to {
+    transform: translate3d(-7vw, 9vh, 0) scale(1.08);
+  }
+}
+@keyframes drift-c {
+  to {
+    transform: translate3d(5vw, -8vh, 0) scale(1.14);
+  }
+}
+
+/* 减少动效：关闭背景漂移与所有过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .blob {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+:root[data-motion='reduced'] .blob {
+  animation: none !important;
+}
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ============================================================
+   焦点与滚动条：焦点态用高对比 outline，不只依赖玻璃高光
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+  background-clip: padding-box;
+}
+:root[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: rgba(40, 50, 90, 0.24);
+  background-clip: padding-box;
+}
+
+/* 屏幕阅读器专用文本 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
